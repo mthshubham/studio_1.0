@@ -34,39 +34,40 @@ export default function Home() {
         return;
       }
       
-      const chats: { [key: string]: Partial<InstagramChat> & { messages: InstagramMessage[] } } = {};
+      const chats: { [key: string]: InstagramChat } = {};
 
       for (const messageFile of messageFiles) {
         try {
             const content = await messageFile.async("string");
             const rawData = JSON.parse(content);
+            const threadPath = rawData.thread_path;
 
-            // Fix encoding issues in participants, title, and messages
-            const participants = rawData.participants.map((p: any) => ({ name: fixInstagramString(p.name) }));
-            const title = fixInstagramString(rawData.title);
-            const messages = rawData.messages.map((m: any) => ({
-              ...m,
-              sender_name: fixInstagramString(m.sender_name),
-              content: m.content ? fixInstagramString(m.content) : undefined,
-              reactions: m.reactions?.map((r: any) => ({
-                ...r,
-                reaction: fixInstagramString(r.reaction),
-                actor: fixInstagramString(r.actor),
-              }))
-            }));
-            
-            const parsedData = { ...rawData, participants, title, messages };
-            const threadPath = parsedData.thread_path;
-
+            // If chat doesn't exist, create it with properly encoded data
             if (!chats[threadPath]) {
-              chats[threadPath] = { 
-                ...parsedData,
-                messages: [], // Initialize with parsed data, but empty messages
+              const participants = rawData.participants.map((p: any) => ({ name: fixInstagramString(p.name) }));
+              const title = fixInstagramString(rawData.title);
+              
+              chats[threadPath] = {
+                ...rawData,
+                participants,
+                title,
+                messages: [], // Initialize with empty messages
               };
             }
             
-            if (Array.isArray(parsedData.messages)) {
-              chats[threadPath].messages!.push(...parsedData.messages);
+            // Process and add messages to the existing chat
+            if (Array.isArray(rawData.messages)) {
+              const newMessages = rawData.messages.map((m: any) => ({
+                ...m,
+                sender_name: fixInstagramString(m.sender_name),
+                content: m.content ? fixInstagramString(m.content) : undefined,
+                reactions: m.reactions?.map((r: any) => ({
+                  ...r,
+                  reaction: fixInstagramString(r.reaction),
+                  actor: fixInstagramString(r.actor),
+                }))
+              }));
+              chats[threadPath].messages.push(...newMessages);
             }
 
         } catch (jsonError) {
@@ -76,9 +77,11 @@ export default function Home() {
       
       const allChats: InstagramChat[] = Object.values(chats).filter(
         (c): c is InstagramChat => !!(c.messages && c.participants && c.title && c.thread_path)
-      ).map((chat) => {
+      );
+
+      // Sort messages within each chat after all files are processed
+      allChats.forEach((chat) => {
         chat.messages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
-        return chat;
       });
 
       if (allChats.length === 0) {
@@ -130,8 +133,7 @@ export default function Home() {
     return (
       <div className="flex flex-col h-screen items-center justify-center p-4 bg-background">
         <div className="w-full max-w-2xl space-y-4">
-            <Skeleton className="h-12 w-1/3" />
-            <Skeleton className="h-8 w-full" />
+            <h1 className="text-3xl font-bold text-center">InstaChronicle</h1>
             <p className="text-center text-muted-foreground pt-4">Processing your chats, this may take a moment...</p>
             <div className="space-y-2 pt-8">
                 <Skeleton className="h-16 w-3/4 ml-auto rounded-lg"/>

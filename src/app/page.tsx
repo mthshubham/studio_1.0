@@ -21,7 +21,7 @@ export default function Home() {
     try {
       const zip = await JSZip.loadAsync(file);
       const messageFiles = Object.values(zip.files).filter((f) =>
-        f.name.endsWith(".json") && !f.name.startsWith("__MACOSX") && f.name.includes("/message_")
+        f.name.endsWith(".json") && !f.name.startsWith("__MACOSX") && f.name.includes("message_")
       );
 
       if (messageFiles.length === 0) {
@@ -48,7 +48,8 @@ export default function Home() {
             }
 
             const threadPath = rawData.thread_path;
-
+            
+            // If it's a new chat, initialize it
             if (!chats[threadPath]) {
               const participants = rawData.participants.map((p: any) => ({ name: fixInstagramString(p.name) }));
               const title = fixInstagramString(rawData.title);

@@ -69,11 +69,11 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     getScrollElement: () => scrollViewportRef.current,
     estimateSize: useCallback((index: number) => {
         const item = groupedMessages[index];
-        if (item.type === 'date') return 60; // Date separator height
+        if (item.type === 'date') return 48; // Date separator height
         
         // Estimate message height
         const { content } = item.message;
-        const baseHeight = 70; // Base for sender, time, padding etc.
+        const baseHeight = 60; // Base for sender, time, padding etc.
         const charsPerLine = 50;
         const lineHeight = 20;
         const lines = content ? Math.ceil(content.length / charsPerLine) : 1;
@@ -83,7 +83,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
   });
 
   useEffect(() => {
-    if (!searchQuery) {
+    if (groupedMessages.length > 0 && !searchQuery) {
         rowVirtualizer.scrollToIndex(groupedMessages.length - 1, { align: 'end', behavior: 'auto' });
     }
   }, [groupedMessages.length, rowVirtualizer, searchQuery]);
@@ -185,7 +185,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
                     <MessageBubble 
                         key={item.id}
                         message={item.message}
-                        isOwner={item.message.sender_name === owner}
+                        isOwner={item.message.sender_name !== owner}
                         searchQuery={searchQuery}
                     />
                 );
@@ -201,7 +201,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
                             height: `${virtualRow.size}px`,
                             transform: `translateY(${virtualRow.start}px)`,
                         }}
-                        className="p-3 sm:p-4 mx-auto max-w-5xl"
+                        className="px-3 sm:px-4 mx-auto max-w-5xl"
                     >
                        {content}
                     </div>

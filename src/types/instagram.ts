@@ -14,11 +14,17 @@ export interface InstagramParticipant {
   name: string;
 }
 
+export interface ChatFile {
+  name: string;
+  messageCount: number;
+}
+
 export interface InstagramChat {
   participants: InstagramParticipant[];
-  messages: InstagramMessage[];
   title: string;
   is_still_participant: boolean;
   thread_type: string;
   thread_path: string;
+  files: ChatFile[];
+  messageCount: number;
 }

@@ -152,7 +152,7 @@ export default function Home() {
       ) : selectedChat ? (
         <ChatView chatData={selectedChat} onClearData={handleClearData} onBack={handleBackToList}/>
       ) : (
-        <ChatListScreen chats={allChatsData} onSelectChat={handleSelectChat} onClearData={onClearData} />
+        <ChatListScreen chats={allChatsData} onSelectChat={handleSelectChat} onClearData={handleClearData} />
       )}
     </main>
   );

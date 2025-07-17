@@ -7,18 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, CalendarDays, X, Trash2 } from "lucide-react";
+import { Search, CalendarDays, X, Trash2, ArrowLeft } from "lucide-react";
 import MessageBubble from "./message-bubble";
 import DateSeparator from "./date-separator";
 
 interface ChatViewProps {
   chatData: InstagramChat;
   onClearData: () => void;
+  onBack: () => void;
 }
 
 type GroupedMessage = { type: 'date'; date: string } | { type: 'message'; message: InstagramMessage, index: number };
 
-export default function ChatView({ chatData, onClearData }: ChatViewProps) {
+export default function ChatView({ chatData, onClearData, onBack }: ChatViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [owner, setOwner] = useState<string>("");
@@ -100,7 +101,12 @@ export default function ChatView({ chatData, onClearData }: ChatViewProps) {
     <div className="flex h-full flex-col">
       <header className="flex-shrink-0 border-b bg-card p-3 sm:p-4">
         <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="text-xl font-semibold truncate" title={chatData.title}>{chatData.title}</h1>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={onBack} className="hidden sm:inline-flex">
+                  <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h1 className="text-xl font-semibold truncate" title={chatData.title}>{chatData.title}</h1>
+            </div>
             <div className="flex items-center gap-2">
               <div className="relative flex-grow">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -155,6 +161,9 @@ export default function ChatView({ chatData, onClearData }: ChatViewProps) {
           )}
         </div>
       </ScrollArea>
+       <Button variant="outline" onClick={onBack} className="sm:hidden m-4">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Chats
+       </Button>
     </div>
   );
 }

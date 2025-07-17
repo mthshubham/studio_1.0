@@ -38,19 +38,19 @@ export default function FileUploadScreen({ onFileSelect }: FileUploadScreenProps
           <div className="flex flex-col items-center justify-center space-y-3 rounded-lg border-2 border-dashed border-border p-8">
             <Upload className="h-12 w-12 text-muted-foreground" />
             <p className="text-muted-foreground">
-              Please select your `message_1.json` file from your Instagram data export.
+              Please select your `.zip` file from your Instagram data export.
             </p>
           </div>
           <Button onClick={handleButtonClick} size="lg" className="w-full bg-accent hover:bg-accent/90">
             <Upload className="mr-2 h-5 w-5" />
-            Select JSON File
+            Select Zip File
           </Button>
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
             className="hidden"
-            accept="application/json"
+            accept="application/zip,application/x-zip-compressed"
           />
         </CardContent>
       </Card>

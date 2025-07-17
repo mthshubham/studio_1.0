@@ -1,95 +1,101 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import JSZip from "jszip";
 import type { InstagramChat } from "@/types/instagram";
 import { useToast } from "@/hooks/use-toast";
 import FileUploadScreen from "@/components/file-upload-screen";
 import ChatView from "@/components/chat-view";
+import ChatListScreen from "@/components/chat-list-screen";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Home() {
-  const [chatData, setChatData] = useState<InstagramChat | null>(null);
+  const [allChatsData, setAllChatsData] = useState<InstagramChat[] | null>(null);
+  const [selectedChat, setSelectedChat] = useState<InstagramChat | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
 
   useEffect(() => {
     try {
-      const savedData = localStorage.getItem("instaChronicleData");
+      const savedData = localStorage.getItem("instaChronicleAllChats");
       if (savedData) {
         const parsedData = JSON.parse(savedData);
-        // Basic validation
-        if (parsedData.messages && parsedData.participants && parsedData.title) {
-          setChatData(parsedData);
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
+          setAllChatsData(parsedData);
         }
       }
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
-      localStorage.removeItem("instaChronicleData");
+      localStorage.removeItem("instaChronicleAllChats");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     setIsLoading(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const result = event.target?.result;
-        if (typeof result !== 'string') {
-          throw new Error("File could not be read properly.");
-        }
-        const parsedData = JSON.parse(result);
-        
-        // More robust validation
-        if (!parsedData.messages || !Array.isArray(parsedData.messages) || !parsedData.participants || !parsedData.title) {
-            toast({
-                variant: "destructive",
-                title: "Invalid File Format",
-                description: "The selected JSON file does not have the expected Instagram chat structure.",
-            });
-            return;
-        }
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const chatFiles = Object.values(zip.files).filter((f) =>
+        f.name.match(/^messages\/inbox\/.*\/message_1\.json$/)
+      );
 
-        // Sort messages by timestamp
-        parsedData.messages.sort((a: any, b: any) => a.timestamp_ms - b.timestamp_ms);
-
-        setChatData(parsedData);
-        localStorage.setItem("instaChronicleData", JSON.stringify(parsedData));
-        toast({
-          title: "Success!",
-          description: "Your chat history has been loaded.",
-        });
-      } catch (error) {
+      if (chatFiles.length === 0) {
         toast({
           variant: "destructive",
-          title: "Upload Failed",
-          description: "Please upload a valid JSON file from your Instagram data export.",
+          title: "No Chats Found",
+          description: "Could not find any chat files in the expected location (messages/inbox/) within the zip file.",
         });
-        console.error("Error parsing JSON:", error);
-      } finally {
         setIsLoading(false);
+        return;
       }
-    };
-    reader.onerror = () => {
-        toast({
-            variant: "destructive",
-            title: "File Read Error",
-            description: "There was an error reading the file.",
-        });
-        setIsLoading(false);
+
+      const allChats: InstagramChat[] = [];
+      for (const chatFile of chatFiles) {
+        const content = await chatFile.async("string");
+        const parsedData = JSON.parse(content);
+        if (parsedData.messages && parsedData.participants && parsedData.title) {
+          parsedData.messages.sort((a: any, b: any) => a.timestamp_ms - b.timestamp_ms);
+          allChats.push(parsedData);
+        }
+      }
+
+      setAllChatsData(allChats);
+      localStorage.setItem("instaChronicleAllChats", JSON.stringify(allChats));
+      toast({
+        title: "Success!",
+        description: `Found ${allChats.length} conversations.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Upload Failed",
+        description: "Please upload a valid zip file from your Instagram data export.",
+      });
+      console.error("Error processing zip file:", error);
+    } finally {
+      setIsLoading(false);
     }
-    reader.readAsText(file);
   };
 
   const handleClearData = useCallback(() => {
-    localStorage.removeItem("instaChronicleData");
-    setChatData(null);
+    localStorage.removeItem("instaChronicleAllChats");
+    setAllChatsData(null);
+    setSelectedChat(null);
     toast({
       title: "Data Cleared",
       description: "You can now upload a new file.",
     });
   }, [toast]);
+
+  const handleSelectChat = (chat: InstagramChat) => {
+    setSelectedChat(chat);
+  };
+  
+  const handleBackToList = () => {
+    setSelectedChat(null);
+  };
+
 
   if (isLoading) {
     return (
@@ -106,13 +112,15 @@ export default function Home() {
       </div>
     );
   }
-
+  
   return (
     <main className="h-full bg-background">
-      {chatData ? (
-        <ChatView chatData={chatData} onClearData={handleClearData} />
-      ) : (
+      {!allChatsData ? (
         <FileUploadScreen onFileSelect={handleFileSelect} />
+      ) : selectedChat ? (
+        <ChatView chatData={selectedChat} onClearData={handleClearData} onBack={handleBackToList}/>
+      ) : (
+        <ChatListScreen chats={allChatsData} onSelectChat={handleSelectChat} onClearData={handleClearData} />
       )}
     </main>
   );

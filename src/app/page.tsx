@@ -56,9 +56,11 @@ export default function Home() {
                   chatMetadata[data.thread_path].files.push(file.name);
                   
                   // Get last message timestamp to sort the chat list
-                  const lastMessage = data.messages[data.messages.length-1];
-                  if(lastMessage && lastMessage.timestamp_ms > chatMetadata[data.thread_path].lastActivity) {
-                      chatMetadata[data.thread_path].lastActivity = lastMessage.timestamp_ms;
+                  if(data.messages && data.messages.length > 0) {
+                    const lastMessage = data.messages[0]; // Instagram exports are newest-first in each file
+                    if(lastMessage && lastMessage.timestamp_ms > chatMetadata[data.thread_path].lastActivity) {
+                        chatMetadata[data.thread_path].lastActivity = lastMessage.timestamp_ms;
+                    }
                   }
               }
           } catch(e) {

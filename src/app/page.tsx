@@ -37,14 +37,14 @@ export default function Home() {
     try {
       const zip = await JSZip.loadAsync(file);
       const messageFiles = Object.values(zip.files).filter((f) =>
-        /messages\/inbox\/[^/]+\/message_\d+\.json$/.test(f.name) && !f.name.startsWith("__MACOSX")
+        /message_\d+\.json$/.test(f.name) && !f.name.startsWith("__MACOSX")
       );
 
       if (messageFiles.length === 0) {
         toast({
           variant: "destructive",
           title: "No Chats Found",
-          description: "Could not find any 'message_x.json' files in the expected folder structure. Please ensure you've uploaded the correct file.",
+          description: "Could not find any 'message_x.json' files. Please ensure you've uploaded the correct zip file.",
         });
         setIsLoading(false);
         return;
@@ -59,18 +59,15 @@ export default function Home() {
             const threadPath = messageFile.name.split('/').slice(0, -1).join('/');
 
             if (!chats[threadPath]) {
-              chats[threadPath] = { messages: [] };
+              chats[threadPath] = { 
+                ...parsedData,
+                messages: [], // Initialize with parsed data, but empty messages
+                thread_path: threadPath 
+              };
             }
             
-            // Merge properties from the JSON file, but don't overwrite existing messages
-            Object.assign(chats[threadPath], {
-                ...parsedData,
-                messages: chats[threadPath].messages || [], 
-                thread_path: threadPath
-            });
-            
             if (Array.isArray(parsedData.messages)) {
-              chats[threadPath].messages.push(...parsedData.messages);
+              chats[threadPath].messages!.push(...parsedData.messages);
             }
 
         } catch (jsonError) {
@@ -81,17 +78,15 @@ export default function Home() {
       const allChats: InstagramChat[] = Object.values(chats).filter(
         (c): c is InstagramChat => !!(c.messages && c.participants && c.title && c.thread_path)
       ).map((chat) => {
-        // Ensure newest message is last
         chat.messages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
         return chat;
       });
-
 
       if (allChats.length === 0) {
         toast({
             variant: "destructive",
             title: "No Valid Chats Found",
-            description: "Found some JSON files, but they weren't in the expected chat format.",
+            description: "Found JSON files, but they weren't in the expected chat format.",
         });
         setIsLoading(false);
         return;
@@ -132,7 +127,6 @@ export default function Home() {
   const handleBackToList = () => {
     setSelectedChat(null);
   };
-
 
   if (isLoading) {
     return (

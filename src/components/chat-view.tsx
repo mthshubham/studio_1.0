@@ -11,6 +11,7 @@ import { Search, CalendarDays, X, Trash2, ArrowLeft } from "lucide-react";
 import MessageBubble from "./message-bubble";
 import DateSeparator from "./date-separator";
 import type { ScrollAreaPrimitive } from "@/components/ui/scroll-area";
+import ThemeToggle from "./theme-toggle";
 
 interface ChatViewProps {
   chatData: InstagramChat;
@@ -56,8 +57,8 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
   const { groupedMessages, availableDates } = useMemo(() => {
     const filtered = chatData.messages.filter(
       (msg) =>
-        msg.content &&
-        msg.content.toLowerCase().includes(searchQuery.toLowerCase())
+        (msg.content &&
+        msg.content.toLowerCase().includes(searchQuery.toLowerCase())) || !msg.content
     );
 
     const availableDates = new Set(chatData.messages.map(msg => new Date(msg.timestamp_ms).toDateString()));
@@ -68,7 +69,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     
     const messagesWithOriginalIndex = filtered.map(message => ({
       ...message,
-      originalIndex: chatData.messages.findIndex(m => m.timestamp_ms === message.timestamp_ms && m.sender_name === m.sender_name)
+      originalIndex: chatData.messages.findIndex(m => m.timestamp_ms === message.timestamp_ms && m.sender_name === message.sender_name)
     }));
 
 
@@ -143,6 +144,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
                   />
                 </PopoverContent>
               </Popover>
+              <ThemeToggle />
               <Button variant="destructive" size="icon" onClick={onClearData}>
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -162,7 +164,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
                     key={`${item.message.timestamp_ms}-${item.index}`}
                     ref={messageRefs.current[item.index]}
                     message={item.message}
-                    isOwner={item.message.sender_name === owner}
+                    isOwner={item.message.sender_name !== owner}
                     searchQuery={searchQuery}
                 />
               );

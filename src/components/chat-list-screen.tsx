@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2, MessageSquare, Users, User } from "lucide-react";
+import ThemeToggle from "./theme-toggle";
 
 interface ChatListScreenProps {
   chats: InstagramChat[];
@@ -27,9 +28,12 @@ export default function ChatListScreen({ chats, onSelectChat, onClearData }: Cha
       <header className="flex-shrink-0 border-b bg-card p-3 sm:p-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           <h1 className="text-xl font-semibold">Your Conversations</h1>
-          <Button variant="destructive" size="icon" onClick={onClearData} aria-label="Clear all data">
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="destructive" size="icon" onClick={onClearData} aria-label="Clear all data">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 

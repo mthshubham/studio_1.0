@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, CalendarDays, X, Trash2, ArrowLeft, ArrowDown } from "lucide-react";
+import { Search, CalendarDays, X, Trash2, ArrowLeft, ArrowDown, ArrowUp } from "lucide-react";
 import MessageBubble from "./message-bubble";
 import DateSeparator from "./date-separator";
 import ThemeToggle from "./theme-toggle";
@@ -18,17 +18,22 @@ interface ChatViewProps {
   chatData: InstagramChat;
   onClearData: () => void;
   onBack: () => void;
+  onLoadMore: () => Promise<void>;
 }
 
 type GroupedMessage = { type: 'date'; date: string, id: string } | { type: 'message'; message: InstagramMessage, id: string };
 
-export default function ChatView({ chatData, onClearData, onBack }: ChatViewProps) {
+export default function ChatView({ chatData, onClearData, onBack, onLoadMore }: ChatViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [owner, setOwner] = useState<string>("");
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [isAtTop, setIsAtTop] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const scrollViewportRef = useRef<HTMLDivElement>(null);
+
+  const hasMoreMessages = (chatData.loadedFileIndex ?? 0) < chatData.message_files.length - 1;
 
   useEffect(() => {
     if (chatData.participants.length > 0) {
@@ -81,18 +86,40 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     overscan: 20,
   });
 
+  const previousMessageCount = useRef(chatData.messages.length);
+
   useEffect(() => {
-    if (groupedMessages.length > 0 && !searchQuery) {
+    const newMessagesCount = chatData.messages.length - previousMessageCount.current;
+    
+    if (newMessagesCount > 0) {
+      // If messages were prepended, scroll to maintain position
+      const previousScrollOffset = rowVirtualizer.getTotalSize();
+      
+      rowVirtualizer.measure();
+      const newScrollOffset = rowVirtualizer.getTotalSize();
+
+      if(scrollViewportRef.current) {
+        scrollViewportRef.current.scrollTop += (newScrollOffset - previousScrollOffset);
+      }
+      
+    } else if (groupedMessages.length > 0 && !searchQuery) {
+        // Initial load, scroll to bottom
         rowVirtualizer.scrollToIndex(groupedMessages.length - 1, { align: 'end', behavior: 'auto' });
     }
-  }, [groupedMessages.length, rowVirtualizer, searchQuery]);
+    previousMessageCount.current = chatData.messages.length;
+
+  }, [chatData.messages.length, groupedMessages.length, rowVirtualizer, searchQuery]);
 
 
   const handleScroll = () => {
     if (!scrollViewportRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 200;
     setShowScrollToBottom(!isAtBottom);
+
+    const atTop = scrollTop < 50;
+    setIsAtTop(atTop);
   }
 
   useEffect(() => {
@@ -108,12 +135,34 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     if (!date) return;
   
     const dateString = date.toDateString();
-    const targetIndex = dateJumpMap.get(dateString);
+    let targetIndex = dateJumpMap.get(dateString);
+
+    if (targetIndex === undefined) {
+      // Find closest date if exact not found
+      let closestDate = new Date();
+      let minDiff = Infinity;
+      dateJumpMap.forEach((_v, k) => {
+        const d = new Date(k);
+        const diff = Math.abs(d.getTime() - date.getTime());
+        if(diff < minDiff){
+          minDiff = diff;
+          closestDate = d;
+        }
+      });
+      targetIndex = dateJumpMap.get(closestDate.toDateString());
+    }
     
     if (targetIndex !== undefined) {
         rowVirtualizer.scrollToIndex(targetIndex, { align: 'start', behavior: 'smooth' });
     }
   };
+
+  const handleLoadMore = async () => {
+    if (isLoadingMore || !hasMoreMessages) return;
+    setIsLoadingMore(true);
+    await onLoadMore();
+    setIsLoadingMore(false);
+  }
 
   const scrollToBottom = () => {
     rowVirtualizer.scrollToIndex(groupedMessages.length - 1, { align: 'end', behavior: 'smooth' });
@@ -130,12 +179,8 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     for (const msg of chatData.messages) {
         dates.add(new Date(msg.timestamp_ms).toDateString());
     }
-    return dates;
+    return Array.from(dates).map(d => new Date(d));
   }, [chatData.messages])
-
-  const disabledDays = (date: Date) => {
-    return !availableDates.has(date.toDateString());
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -164,7 +209,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
                     mode="single"
                     selected={selectedDate}
                     onSelect={handleDateJump}
-                    disabled={disabledDays}
+                    disabled={(date) => !availableDates.some(d => d.toDateString() === date.toDateString())}
                     initialFocus
                   />
                 </PopoverContent>
@@ -180,6 +225,16 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
       <div className="flex-grow relative overflow-hidden">
         <ScrollArea className="absolute inset-0" viewportRef={scrollViewportRef}>
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+            
+            {isAtTop && hasMoreMessages && (
+                <div className="flex justify-center p-4">
+                    <Button onClick={handleLoadMore} disabled={isLoadingMore}>
+                        <ArrowUp className="mr-2 h-4 w-4" />
+                        {isLoadingMore ? "Loading..." : "Load Older Messages"}
+                    </Button>
+                </div>
+            )}
+            
             {groupedMessages.length > 0 ? (
                 rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const item = groupedMessages[virtualRow.index];

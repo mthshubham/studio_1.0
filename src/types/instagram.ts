@@ -28,4 +28,5 @@ export interface IncompleteChat {
 // Full chat structure with all messages, used for the chat view
 export interface InstagramChat extends IncompleteChat {
   messages: InstagramMessage[];
+  loadedFileIndex?: number; // Keep track of which message_x.json is loaded
 }

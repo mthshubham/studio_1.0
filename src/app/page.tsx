@@ -38,13 +38,16 @@ export default function Home() {
         return;
       }
 
+      // First pass: build chat metadata without reading full message content
       for (const file of messageFiles) {
           try {
+              // Only read enough to get metadata, not the whole file
               const content = await file.async("string");
               const data = JSON.parse(content);
+
               if (data.thread_path && Array.isArray(data.participants)) {
                   if (!chatMetadata[data.thread_path]) {
-                      chatMetadata[data.thread_path] = {
+                       chatMetadata[data.thread_path] = {
                           title: fixInstagramString(data.title),
                           participants: data.participants.map((p: any) => ({ name: fixInstagramString(p.name) })),
                           thread_type: data.thread_type,
@@ -54,19 +57,28 @@ export default function Home() {
                       };
                   }
                   chatMetadata[data.thread_path].files.push(file.name);
-                  
-                  // Get last message timestamp to sort the chat list
-                  if(data.messages && data.messages.length > 0) {
-                    const lastMessage = data.messages[0]; // Instagram exports are newest-first in each file
-                    if(lastMessage && lastMessage.timestamp_ms > chatMetadata[data.thread_path].lastActivity) {
-                        chatMetadata[data.thread_path].lastActivity = lastMessage.timestamp_ms;
-                    }
-                  }
               }
           } catch(e) {
-              console.warn(`Skipping file due to error: ${file.name}`, e);
+              console.warn(`Skipping metadata scan for file: ${file.name}`, e);
           }
       }
+      
+      // Second pass: get last activity from message_1.json for sorting
+      for(const thread_path in chatMetadata) {
+        const message1File = zip.file(chatMetadata[thread_path].files.find(f => f.endsWith('message_1.json')) || chatMetadata[thread_path].files[0]);
+        if (message1File) {
+            try {
+                const content = await message1File.async("string");
+                const data = JSON.parse(content);
+                if (data.messages && data.messages.length > 0) {
+                    chatMetadata[thread_path].lastActivity = data.messages[0].timestamp_ms;
+                }
+            } catch(e) {
+                console.warn(`Could not read last activity for ${thread_path}`, e);
+            }
+        }
+      }
+
 
       const chatsList: IncompleteChat[] = Object.entries(chatMetadata).map(([thread_path, meta]) => ({
         thread_path,
@@ -74,7 +86,12 @@ export default function Home() {
         participants: meta.participants,
         thread_type: meta.thread_type,
         is_still_participant: meta.is_still_participant,
-        message_files: meta.files,
+        // Sort files numerically: message_1.json, message_2.json, ...
+        message_files: meta.files.sort((a, b) => {
+            const numA = parseInt(a.match(/message_(\d+)\.json$/)?.[1] || '0', 10);
+            const numB = parseInt(b.match(/message_(\d+)\.json$/)?.[1] || '0', 10);
+            return numA - numB;
+        }),
         lastActivity: meta.lastActivity
       }));
 
@@ -115,31 +132,31 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-        let allMessages: InstagramMessage[] = [];
-        for (const fileName of chatToLoad.message_files) {
-            const file = zipInstance.file(fileName);
-            if (file) {
-                const content = await file.async("string");
-                const data = JSON.parse(content);
-                const decodedMessages = data.messages.map((m: any) => ({
-                    ...m,
-                    sender_name: fixInstagramString(m.sender_name),
-                    content: m.content ? fixInstagramString(m.content) : undefined,
-                    reactions: m.reactions?.map((r: any) => ({
-                      ...r,
-                      reaction: fixInstagramString(r.reaction),
-                      actor: fixInstagramString(r.actor),
-                    }))
-                }));
-                allMessages.push(...decodedMessages);
-            }
+        const firstFile = chatToLoad.message_files[0];
+        const file = zipInstance.file(firstFile);
+        let initialMessages: InstagramMessage[] = [];
+
+        if (file) {
+            const content = await file.async("string");
+            const data = JSON.parse(content);
+            initialMessages = data.messages.map((m: any) => ({
+                ...m,
+                sender_name: fixInstagramString(m.sender_name),
+                content: m.content ? fixInstagramString(m.content) : undefined,
+                reactions: m.reactions?.map((r: any) => ({
+                  ...r,
+                  reaction: fixInstagramString(r.reaction),
+                  actor: fixInstagramString(r.actor),
+                }))
+            }));
         }
         
-        allMessages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+        initialMessages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
         
         const fullChat: InstagramChat = {
             ...chatToLoad,
-            messages: allMessages
+            messages: initialMessages,
+            loadedFileIndex: 0,
         };
         
         setSelectedChat(fullChat);
@@ -149,6 +166,50 @@ export default function Home() {
         console.error("Failed to load full chat:", e);
     } finally {
         setIsLoading(false);
+    }
+  };
+
+  const loadMoreMessages = async () => {
+    if (!selectedChat || !zipInstance) return;
+
+    const nextFileIndex = (selectedChat.loadedFileIndex ?? 0) + 1;
+    if (nextFileIndex >= selectedChat.message_files.length) {
+        // No more files to load
+        if (selectedChat) {
+            setSelectedChat({ ...selectedChat, loadedFileIndex: nextFileIndex });
+        }
+        return;
+    }
+
+    const fileName = selectedChat.message_files[nextFileIndex];
+    const file = zipInstance.file(fileName);
+
+    try {
+        if (file) {
+            const content = await file.async("string");
+            const data = JSON.parse(content);
+            const newMessages: InstagramMessage[] = data.messages.map((m: any) => ({
+                ...m,
+                sender_name: fixInstagramString(m.sender_name),
+                content: m.content ? fixInstagramString(m.content) : undefined,
+                 reactions: m.reactions?.map((r: any) => ({
+                    ...r,
+                    reaction: fixInstagramString(r.reaction),
+                    actor: fixInstagramString(r.actor),
+                 }))
+            }));
+
+            newMessages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+            
+            setSelectedChat({
+                ...selectedChat,
+                messages: [...newMessages, ...selectedChat.messages],
+                loadedFileIndex: nextFileIndex,
+            });
+        }
+    } catch (e) {
+        toast({ variant: "destructive", title: "Failed to load older messages", description: "The next message file might be corrupted."});
+        console.error("Failed to load more messages:", e);
     }
   };
 
@@ -183,7 +244,12 @@ export default function Home() {
       {!incompleteChats ? (
         <FileUploadScreen onFileSelect={handleFileSelect} />
       ) : selectedChat ? (
-        <ChatView chatData={selectedChat} onClearData={handleClearData} onBack={handleBackToList}/>
+        <ChatView 
+            chatData={selectedChat} 
+            onClearData={handleClearData} 
+            onBack={handleBackToList}
+            onLoadMore={loadMoreMessages}
+        />
       ) : (
         <ChatListScreen chats={incompleteChats} onSelectChat={handleSelectChat} onClearData={handleClearData} />
       )}

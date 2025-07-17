@@ -8,6 +8,7 @@ import FileUploadScreen from "@/components/file-upload-screen";
 import ChatView from "@/components/chat-view";
 import ChatListScreen from "@/components/chat-list-screen";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fixInstagramString } from "@/lib/utils";
 
 export default function Home() {
   const [allChatsData, setAllChatsData] = useState<InstagramChat[] | null>(null);
@@ -38,7 +39,23 @@ export default function Home() {
       for (const messageFile of messageFiles) {
         try {
             const content = await messageFile.async("string");
-            const parsedData = JSON.parse(content);
+            const rawData = JSON.parse(content);
+
+            // Fix encoding issues in participants, title, and messages
+            const participants = rawData.participants.map((p: any) => ({ name: fixInstagramString(p.name) }));
+            const title = fixInstagramString(rawData.title);
+            const messages = rawData.messages.map((m: any) => ({
+              ...m,
+              sender_name: fixInstagramString(m.sender_name),
+              content: m.content ? fixInstagramString(m.content) : undefined,
+              reactions: m.reactions?.map((r: any) => ({
+                ...r,
+                reaction: fixInstagramString(r.reaction),
+                actor: fixInstagramString(r.actor),
+              }))
+            }));
+            
+            const parsedData = { ...rawData, participants, title, messages };
             const threadPath = parsedData.thread_path;
 
             if (!chats[threadPath]) {

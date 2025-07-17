@@ -37,14 +37,14 @@ export default function Home() {
     try {
       const zip = await JSZip.loadAsync(file);
       const chatFiles = Object.values(zip.files).filter((f) =>
-        f.name.match(/^messages\/inbox\/.*\/message_1\.json$/)
+        f.name.endsWith("message_1.json") && !f.name.startsWith("__MACOSX")
       );
 
       if (chatFiles.length === 0) {
         toast({
           variant: "destructive",
           title: "No Chats Found",
-          description: "Could not find any chat files in the expected location (messages/inbox/) within the zip file.",
+          description: "Could not find any 'message_1.json' files in the zip archive. Please ensure you've uploaded the correct file.",
         });
         setIsLoading(false);
         return;
@@ -52,12 +52,28 @@ export default function Home() {
 
       const allChats: InstagramChat[] = [];
       for (const chatFile of chatFiles) {
-        const content = await chatFile.async("string");
-        const parsedData = JSON.parse(content);
-        if (parsedData.messages && parsedData.participants && parsedData.title) {
-          parsedData.messages.sort((a: any, b: any) => a.timestamp_ms - b.timestamp_ms);
-          allChats.push(parsedData);
+        try {
+            const content = await chatFile.async("string");
+            const parsedData = JSON.parse(content);
+            if (parsedData.messages && parsedData.participants && parsedData.title) {
+            // It's a valid chat file, add it to our list
+            parsedData.messages.sort((a: any, b: any) => a.timestamp_ms - b.timestamp_ms);
+            allChats.push(parsedData);
+            }
+        } catch (jsonError) {
+            console.warn(`Skipping file due to JSON parsing error: ${chatFile.name}`, jsonError);
+            // This file might not be a chat log, so we can safely ignore it.
         }
+      }
+      
+      if (allChats.length === 0) {
+        toast({
+            variant: "destructive",
+            title: "No Valid Chats Found",
+            description: "Found some JSON files, but they weren't in the expected chat format.",
+        });
+        setIsLoading(false);
+        return;
       }
 
       setAllChatsData(allChats);

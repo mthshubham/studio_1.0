@@ -56,21 +56,23 @@ export default function Home() {
                 ...rawData,
                 participants,
                 title,
-                messages: [],
+                messages: [], // Initialize with an empty message array
               };
             }
             
-            const newMessages = rawData.messages.map((m: any) => ({
-              ...m,
-              sender_name: fixInstagramString(m.sender_name),
-              content: m.content ? fixInstagramString(m.content) : undefined,
-              reactions: m.reactions?.map((r: any) => ({
-                ...r,
-                reaction: fixInstagramString(r.reaction),
-                actor: fixInstagramString(r.actor),
-              }))
-            }));
-            chats[threadPath].messages.push(...newMessages);
+            // Efficiently append new messages, decoding strings as we go.
+            for (const m of rawData.messages) {
+              chats[threadPath].messages.push({
+                ...m,
+                sender_name: fixInstagramString(m.sender_name),
+                content: m.content ? fixInstagramString(m.content) : undefined,
+                reactions: m.reactions?.map((r: any) => ({
+                  ...r,
+                  reaction: fixInstagramString(r.reaction),
+                  actor: fixInstagramString(r.actor),
+                }))
+              });
+            }
 
         } catch (jsonError) {
             console.warn(`Skipping file due to JSON parsing error: ${messageFile.name}`, jsonError);
@@ -81,7 +83,7 @@ export default function Home() {
         (c): c is InstagramChat => !!(c.messages && c.participants && c.title && c.thread_path)
       );
 
-      // Sort messages within each chat after all files are processed
+      // Sort messages within each chat once after all files are processed
       allChats.forEach((chat) => {
         chat.messages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
       });
@@ -150,7 +152,7 @@ export default function Home() {
       ) : selectedChat ? (
         <ChatView chatData={selectedChat} onClearData={handleClearData} onBack={handleBackToList}/>
       ) : (
-        <ChatListScreen chats={allChatsData} onSelectChat={handleSelectChat} onClearData={handleClearData} />
+        <ChatListScreen chats={allChatsData} onSelectChat={handleSelectChat} onClearData={onClearData} />
       )}
     </main>
   );

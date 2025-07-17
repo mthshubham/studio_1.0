@@ -21,7 +21,7 @@ export default function Home() {
     try {
       const zip = await JSZip.loadAsync(file);
       const messageFiles = Object.values(zip.files).filter((f) =>
-        /message_\d+\.json$/.test(f.name) && !f.name.startsWith("__MACOSX")
+        f.name.endsWith(".json") && !f.name.startsWith("__MACOSX") && f.name.includes("/message_")
       );
 
       if (messageFiles.length === 0) {
@@ -40,9 +40,15 @@ export default function Home() {
         try {
             const content = await messageFile.async("string");
             const rawData = JSON.parse(content);
+
+            // Basic validation for a chat file
+            if (!rawData.thread_path || !rawData.participants || !rawData.messages) {
+                console.warn(`Skipping file as it doesn't seem to be a valid chat file: ${messageFile.name}`);
+                continue;
+            }
+
             const threadPath = rawData.thread_path;
 
-            // If chat doesn't exist, create it with properly encoded data
             if (!chats[threadPath]) {
               const participants = rawData.participants.map((p: any) => ({ name: fixInstagramString(p.name) }));
               const title = fixInstagramString(rawData.title);
@@ -56,19 +62,17 @@ export default function Home() {
             }
             
             // Process and add messages to the existing chat
-            if (Array.isArray(rawData.messages)) {
-              const newMessages = rawData.messages.map((m: any) => ({
-                ...m,
-                sender_name: fixInstagramString(m.sender_name),
-                content: m.content ? fixInstagramString(m.content) : undefined,
-                reactions: m.reactions?.map((r: any) => ({
-                  ...r,
-                  reaction: fixInstagramString(r.reaction),
-                  actor: fixInstagramString(r.actor),
-                }))
-              }));
-              chats[threadPath].messages.push(...newMessages);
-            }
+            const newMessages = rawData.messages.map((m: any) => ({
+              ...m,
+              sender_name: fixInstagramString(m.sender_name),
+              content: m.content ? fixInstagramString(m.content) : undefined,
+              reactions: m.reactions?.map((r: any) => ({
+                ...r,
+                reaction: fixInstagramString(r.reaction),
+                actor: fixInstagramString(r.actor),
+              }))
+            }));
+            chats[threadPath].messages.push(...newMessages);
 
         } catch (jsonError) {
             console.warn(`Skipping file due to JSON parsing error: ${messageFile.name}`, jsonError);

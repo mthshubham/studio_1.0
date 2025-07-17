@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo, useState, useRef, createRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import type { InstagramChat, InstagramMessage } from "@/types/instagram";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, CalendarDays, X, Trash2, ArrowLeft } from "lucide-react";
+import { Search, CalendarDays, X, Trash2, ArrowLeft, ArrowDown } from "lucide-react";
 import MessageBubble from "./message-bubble";
 import DateSeparator from "./date-separator";
-import type { ScrollAreaPrimitive } from "@/components/ui/scroll-area";
 import ThemeToggle from "./theme-toggle";
+import { useVirtualizer } from "@tanstack/react-virtual";
+
 
 interface ChatViewProps {
   chatData: InstagramChat;
@@ -19,16 +20,15 @@ interface ChatViewProps {
   onBack: () => void;
 }
 
-type GroupedMessage = { type: 'date'; date: string } | { type: 'message'; message: InstagramMessage, index: number };
+type GroupedMessage = { type: 'date'; date: string, id: string } | { type: 'message'; message: InstagramMessage, id: string };
 
 export default function ChatView({ chatData, onClearData, onBack }: ChatViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [owner, setOwner] = useState<string>("");
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const scrollViewportRef = useRef<HTMLDivElement>(null);
-  const messageRefs = useRef<React.RefObject<HTMLDivElement>[]>([]);
-  const dateHeaderRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   useEffect(() => {
     // Assuming the first participant is the owner of the exported data.
@@ -37,76 +37,96 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     }
   }, [chatData.participants]);
   
-  // Assign refs
-  messageRefs.current = useMemo(() => 
-    Array(chatData.messages.length).fill(null).map((_, i) => messageRefs.current[i] || createRef<HTMLDivElement>())
-  , [chatData.messages.length]);
-  
-  const scrollToBottom = () => {
-    if (scrollViewportRef.current) {
-        scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
-    }
-  };
-
-  useEffect(() => {
-    // Scroll to bottom on initial load and when chat data changes
-    scrollToBottom();
-  }, [chatData]);
-
-
-  const { groupedMessages, availableDates } = useMemo(() => {
-    const filtered = chatData.messages.filter(
-      (msg) =>
-        (msg.content &&
-        msg.content.toLowerCase().includes(searchQuery.toLowerCase())) || !msg.content
-    );
-
-    const availableDates = new Set(chatData.messages.map(msg => new Date(msg.timestamp_ms).toDateString()));
+  const { groupedMessages, dateJumpMap } = useMemo(() => {
+    const filtered = searchQuery
+      ? chatData.messages.filter((msg) => msg.content?.toLowerCase().includes(searchQuery.toLowerCase()))
+      : chatData.messages;
 
     if (filtered.length === 0) {
-      return { groupedMessages: [], availableDates };
+      return { groupedMessages: [], dateJumpMap: new Map() };
     }
     
-    const messagesWithOriginalIndex = filtered.map(message => ({
-      ...message,
-      originalIndex: chatData.messages.findIndex(m => m.timestamp_ms === message.timestamp_ms && m.sender_name === message.sender_name)
-    }));
-
-
     const groups: GroupedMessage[] = [];
+    const dateMap = new Map<string, number>();
     let lastDate: string | null = null;
 
-    messagesWithOriginalIndex.forEach((message) => {
+    filtered.forEach((message, index) => {
       const messageDate = new Date(message.timestamp_ms).toDateString();
       if (messageDate !== lastDate) {
-        groups.push({ type: "date", date: messageDate });
+        const dateId = `date-${messageDate}`;
+        groups.push({ type: "date", date: messageDate, id: dateId });
+        dateMap.set(messageDate, groups.length - 1);
         lastDate = messageDate;
       }
-      groups.push({ type: "message", message: message, index: message.originalIndex });
+      groups.push({ type: "message", message: message, id: `msg-${message.timestamp_ms}-${index}` });
     });
 
-    return { groupedMessages: groups, availableDates };
+    return { groupedMessages: groups, dateJumpMap: dateMap };
   }, [chatData.messages, searchQuery]);
+  
+  const rowVirtualizer = useVirtualizer({
+    count: groupedMessages.length,
+    getScrollElement: () => scrollViewportRef.current,
+    estimateSize: useCallback((index: number) => {
+        const item = groupedMessages[index];
+        if (item.type === 'date') return 60; // Date separator height
+        
+        // Estimate message height
+        const { content } = item.message;
+        const baseHeight = 70; // Base for sender, time, padding etc.
+        const charsPerLine = 50;
+        const lineHeight = 20;
+        const lines = content ? Math.ceil(content.length / charsPerLine) : 1;
+        return baseHeight + lines * lineHeight;
+    }, [groupedMessages]),
+    overscan: 20, // Render more items for smoother scrolling
+  });
+
+  useEffect(() => {
+    if (!searchQuery) {
+        rowVirtualizer.scrollToIndex(groupedMessages.length - 1, { align: 'end', behavior: 'auto' });
+    }
+  }, [groupedMessages.length, rowVirtualizer, searchQuery]);
+
+
+  const handleScroll = () => {
+    if (!scrollViewportRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 200;
+    setShowScrollToBottom(!isAtBottom);
+  }
+
+  useEffect(() => {
+    const scrollEl = scrollViewportRef.current;
+    scrollEl?.addEventListener('scroll', handleScroll);
+    return () => scrollEl?.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleDateJump = (date: Date | undefined) => {
     setSelectedDate(date);
     if (!date) return;
   
     const dateString = date.toDateString();
-    const targetRef = dateHeaderRefs.current.get(dateString);
-  
-    if (targetRef && scrollViewportRef.current) {
-        const viewport = scrollViewportRef.current;
-        const targetTop = targetRef.offsetTop;
-        viewport.scrollTo({ top: targetTop - viewport.offsetTop, behavior: 'smooth' });
+    const targetIndex = dateJumpMap.get(dateString);
+    
+    if (targetIndex !== undefined) {
+        rowVirtualizer.scrollToIndex(targetIndex, { align: 'start', behavior: 'smooth' });
     }
   };
+
+  const scrollToBottom = () => {
+    rowVirtualizer.scrollToIndex(groupedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+  }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   }
 
   const clearSearch = () => setSearchQuery("");
+  
+  const availableDates = useMemo(() => {
+    return new Set(chatData.messages.map(msg => new Date(msg.timestamp_ms).toDateString()))
+  }, [chatData.messages])
 
   const disabledDays = (date: Date) => {
     return !availableDates.has(date.toDateString());
@@ -151,32 +171,64 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
             </div>
         </div>
       </header>
+      
+      <div className="flex-grow relative overflow-hidden">
+        <ScrollArea className="absolute inset-0" viewportRef={scrollViewportRef}>
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+            {groupedMessages.length > 0 ? (
+                rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = groupedMessages[virtualRow.index];
+                
+                const content = item.type === 'date' ? (
+                    <DateSeparator key={item.id} date={item.date} />
+                ) : (
+                    <MessageBubble 
+                        key={item.id}
+                        message={item.message}
+                        isOwner={item.message.sender_name === owner}
+                        searchQuery={searchQuery}
+                    />
+                );
 
-      <ScrollArea className="flex-grow" viewportRef={scrollViewportRef}>
-        <div className="mx-auto max-w-5xl space-y-4 p-3 sm:p-4">
-          {groupedMessages.length > 0 ? (
-            groupedMessages.map((item, idx) => {
-              if (item.type === 'date') {
-                return <DateSeparator key={`${item.date}-${idx}`} date={item.date} ref={(el) => dateHeaderRefs.current.set(item.date, el)} />;
-              }
-              return (
-                <MessageBubble 
-                    key={`${item.message.timestamp_ms}-${item.index}`}
-                    ref={messageRefs.current[item.index]}
-                    message={item.message}
-                    isOwner={item.message.sender_name !== owner}
-                    searchQuery={searchQuery}
-                />
-              );
-            })
-          ) : (
-            <div className="text-center text-muted-foreground py-16">
-                <p className="font-semibold text-lg">No messages found</p>
-                <p>{searchQuery ? "Try a different search term." : "Your chat appears to be empty."}</p>
+                return (
+                    <div
+                        key={item.id}
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: `${virtualRow.size}px`,
+                            transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                        className="p-3 sm:p-4 mx-auto max-w-5xl"
+                    >
+                       {content}
+                    </div>
+                )
+                })
+            ) : (
+                <div className="text-center text-muted-foreground py-16">
+                    <p className="font-semibold text-lg">No messages found</p>
+                    <p>{searchQuery ? "Try a different search term." : "Your chat appears to be empty."}</p>
+                </div>
+            )}
             </div>
-          )}
-        </div>
-      </ScrollArea>
+        </ScrollArea>
+
+        {showScrollToBottom && (
+            <Button
+                variant="secondary"
+                size="icon"
+                className="absolute bottom-6 right-6 sm:bottom-10 sm:right-10 rounded-full h-12 w-12 shadow-lg z-10"
+                onClick={scrollToBottom}
+                aria-label="Scroll to bottom"
+            >
+                <ArrowDown className="h-6 w-6"/>
+            </Button>
+        )}
+      </div>
+
        <Button variant="outline" onClick={onBack} className="sm:hidden m-4">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Chats
        </Button>

@@ -16,6 +16,7 @@ export type LoadedInstagramChat = Omit<InstagramChat, 'files' | 'messageCount'> 
 };
 
 export default function Home() {
+  const [zipFile, setZipFile] = useState<File | null>(null);
   const [allChatsData, setAllChatsData] = useState<InstagramChat[] | null>(null);
   const [selectedChat, setSelectedChat] = useState<LoadedInstagramChat | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -24,6 +25,7 @@ export default function Home() {
 
   const handleFileSelect = async (file: File) => {
     setIsLoading(true);
+    setZipFile(file); // Store the file in state
     try {
       const zip = await JSZip.loadAsync(file);
       
@@ -94,6 +96,7 @@ export default function Home() {
           description: "Could not find any 'message_x.json' files in the expected folder structure.",
         });
         setIsLoading(false);
+        setZipFile(null);
         return;
       }
 
@@ -117,7 +120,6 @@ export default function Home() {
 
   const handleSelectChat = useCallback(async (chat: InstagramChat) => {
     setIsChatLoading(true);
-    const zipFile = (document.querySelector('input[type="file"]') as HTMLInputElement)?.files?.[0];
     if (!zipFile) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not find the uploaded ZIP file.' });
         setIsChatLoading(false);
@@ -162,10 +164,11 @@ export default function Home() {
     } finally {
         setIsChatLoading(false);
     }
-  }, [toast]);
+  }, [toast, zipFile]);
   
 
   const handleClearData = useCallback(() => {
+    setZipFile(null);
     setAllChatsData(null);
     setSelectedChat(null);
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;

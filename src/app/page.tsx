@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import JSZip from "jszip";
 import type { InstagramChat, InstagramMessage } from "@/types/instagram";
 import { useToast } from "@/hooks/use-toast";
@@ -12,25 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Home() {
   const [allChatsData, setAllChatsData] = useState<InstagramChat[] | null>(null);
   const [selectedChat, setSelectedChat] = useState<InstagramChat | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    try {
-      const savedData = localStorage.getItem("instaChronicleAllChats");
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        if (Array.isArray(parsedData) && parsedData.length > 0) {
-          setAllChatsData(parsedData);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load data from localStorage", error);
-      localStorage.removeItem("instaChronicleAllChats");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   const handleFileSelect = async (file: File) => {
     setIsLoading(true);
@@ -56,13 +39,12 @@ export default function Home() {
         try {
             const content = await messageFile.async("string");
             const parsedData = JSON.parse(content);
-            const threadPath = messageFile.name.split('/').slice(0, -1).join('/');
+            const threadPath = parsedData.thread_path;
 
             if (!chats[threadPath]) {
               chats[threadPath] = { 
                 ...parsedData,
                 messages: [], // Initialize with parsed data, but empty messages
-                thread_path: threadPath 
               };
             }
             
@@ -93,7 +75,7 @@ export default function Home() {
       }
 
       setAllChatsData(allChats);
-      localStorage.setItem("instaChronicleAllChats", JSON.stringify(allChats));
+      
       toast({
         title: "Success!",
         description: `Found ${allChats.length} conversations.`,
@@ -102,7 +84,7 @@ export default function Home() {
       toast({
         variant: "destructive",
         title: "Upload Failed",
-        description: "Please upload a valid zip file from your Instagram data export.",
+        description: "An error occurred while processing the zip file.",
       });
       console.error("Error processing zip file:", error);
     } finally {
@@ -111,7 +93,6 @@ export default function Home() {
   };
 
   const handleClearData = useCallback(() => {
-    localStorage.removeItem("instaChronicleAllChats");
     setAllChatsData(null);
     setSelectedChat(null);
     toast({
@@ -134,6 +115,7 @@ export default function Home() {
         <div className="w-full max-w-2xl space-y-4">
             <Skeleton className="h-12 w-1/3" />
             <Skeleton className="h-8 w-full" />
+            <p className="text-center text-muted-foreground pt-4">Processing your chats, this may take a moment...</p>
             <div className="space-y-2 pt-8">
                 <Skeleton className="h-16 w-3/4 ml-auto rounded-lg"/>
                 <Skeleton className="h-20 w-2/3 rounded-lg"/>

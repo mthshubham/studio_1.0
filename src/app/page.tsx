@@ -59,12 +59,15 @@ export default function Home() {
             const threadPath = messageFile.name.split('/').slice(0, -1).join('/');
 
             if (!chats[threadPath]) {
-              chats[threadPath] = { 
-                ...parsedData,
-                messages: [],
-                thread_path: threadPath
-              };
+              chats[threadPath] = { messages: [] };
             }
+            
+            // Merge properties from the JSON file, but don't overwrite existing messages
+            Object.assign(chats[threadPath], {
+                ...parsedData,
+                messages: chats[threadPath].messages || [], 
+                thread_path: threadPath
+            });
             
             if (Array.isArray(parsedData.messages)) {
               chats[threadPath].messages.push(...parsedData.messages);
@@ -76,11 +79,11 @@ export default function Home() {
       }
       
       const allChats: InstagramChat[] = Object.values(chats).filter(
-        c => c.messages && c.participants && c.title
+        (c): c is InstagramChat => !!(c.messages && c.participants && c.title && c.thread_path)
       ).map((chat) => {
         // Ensure newest message is last
         chat.messages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
-        return chat as InstagramChat;
+        return chat;
       });
 
 

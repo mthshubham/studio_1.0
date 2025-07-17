@@ -14,6 +14,7 @@ import DateSeparator from "./date-separator";
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { format, getMonth, getYear, startOfMonth } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import ThemeToggle from "./theme-toggle";
 
 
 interface ChatViewProps {

@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, CalendarDays, X, Trash2, ArrowLeft } from "lucide-react";
 import MessageBubble from "./message-bubble";
 import DateSeparator from "./date-separator";
+import type { ScrollAreaPrimitive } from "@/components/ui/scroll-area";
 
 interface ChatViewProps {
   chatData: InstagramChat;
@@ -24,7 +25,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [owner, setOwner] = useState<string>("");
 
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<React.RefObject<HTMLDivElement>[]>([]);
   const dateHeaderRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
@@ -39,6 +40,17 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
   messageRefs.current = useMemo(() => 
     Array(chatData.messages.length).fill(null).map((_, i) => messageRefs.current[i] || createRef<HTMLDivElement>())
   , [chatData.messages.length]);
+  
+  const scrollToBottom = () => {
+    if (scrollViewportRef.current) {
+        scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    // Scroll to bottom on initial load and when chat data changes
+    scrollToBottom();
+  }, [chatData]);
 
 
   const { groupedMessages, availableDates } = useMemo(() => {
@@ -82,8 +94,10 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     const dateString = date.toDateString();
     const targetRef = dateHeaderRefs.current.get(dateString);
   
-    if (targetRef) {
-      targetRef.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (targetRef && scrollViewportRef.current) {
+        const viewport = scrollViewportRef.current;
+        const targetTop = targetRef.offsetTop;
+        viewport.scrollTo({ top: targetTop - viewport.offsetTop, behavior: 'smooth' });
     }
   };
 
@@ -136,7 +150,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
         </div>
       </header>
 
-      <ScrollArea className="flex-grow" ref={scrollAreaRef}>
+      <ScrollArea className="flex-grow" viewportRef={scrollViewportRef}>
         <div className="mx-auto max-w-5xl space-y-4 p-3 sm:p-4">
           {groupedMessages.length > 0 ? (
             groupedMessages.map((item, idx) => {

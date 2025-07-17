@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import JSZip from "jszip";
-import type { InstagramChat } from "@/types/instagram";
+import type { InstagramChat, InstagramMessage } from "@/types/instagram";
 import { useToast } from "@/hooks/use-toast";
 import FileUploadScreen from "@/components/file-upload-screen";
 import ChatView from "@/components/chat-view";
@@ -36,36 +36,54 @@ export default function Home() {
     setIsLoading(true);
     try {
       const zip = await JSZip.loadAsync(file);
-      const chatFiles = Object.values(zip.files).filter((f) =>
-        f.name.endsWith("message_1.json") && !f.name.startsWith("__MACOSX")
+      const messageFiles = Object.values(zip.files).filter((f) =>
+        /messages\/inbox\/[^/]+\/message_\d+\.json$/.test(f.name) && !f.name.startsWith("__MACOSX")
       );
 
-      if (chatFiles.length === 0) {
+      if (messageFiles.length === 0) {
         toast({
           variant: "destructive",
           title: "No Chats Found",
-          description: "Could not find any 'message_1.json' files in the zip archive. Please ensure you've uploaded the correct file.",
+          description: "Could not find any 'message_x.json' files in the expected folder structure. Please ensure you've uploaded the correct file.",
         });
         setIsLoading(false);
         return;
       }
+      
+      const chats: { [key: string]: Partial<InstagramChat> & { messages: InstagramMessage[] } } = {};
 
-      const allChats: InstagramChat[] = [];
-      for (const chatFile of chatFiles) {
+      for (const messageFile of messageFiles) {
         try {
-            const content = await chatFile.async("string");
+            const content = await messageFile.async("string");
             const parsedData = JSON.parse(content);
-            if (parsedData.messages && parsedData.participants && parsedData.title) {
-            // It's a valid chat file, add it to our list
-            parsedData.messages.sort((a: any, b: any) => a.timestamp_ms - b.timestamp_ms);
-            allChats.push(parsedData);
+            const threadPath = messageFile.name.split('/').slice(0, -1).join('/');
+
+            if (!chats[threadPath]) {
+              chats[threadPath] = { 
+                ...parsedData,
+                messages: [],
+                thread_path: threadPath
+              };
             }
+            
+            if (Array.isArray(parsedData.messages)) {
+              chats[threadPath].messages.push(...parsedData.messages);
+            }
+
         } catch (jsonError) {
-            console.warn(`Skipping file due to JSON parsing error: ${chatFile.name}`, jsonError);
-            // This file might not be a chat log, so we can safely ignore it.
+            console.warn(`Skipping file due to JSON parsing error: ${messageFile.name}`, jsonError);
         }
       }
       
+      const allChats: InstagramChat[] = Object.values(chats).filter(
+        c => c.messages && c.participants && c.title
+      ).map((chat) => {
+        // Ensure newest message is last
+        chat.messages.sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+        return chat as InstagramChat;
+      });
+
+
       if (allChats.length === 0) {
         toast({
             variant: "destructive",

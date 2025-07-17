@@ -59,21 +59,21 @@ const MessageBubble = forwardRef<HTMLDivElement, MessageBubbleProps>(({ message,
       ref={ref}
       className={cn(
         "flex w-full items-start gap-3",
-        isOwner ? "justify-end" : "justify-start"
+        isOwner ? "justify-start" : "justify-end"
       )}
     >
       <div
         className={cn(
           "max-w-[75%] rounded-2xl p-3 shadow-md",
-          isOwner
+          !isOwner
             ? "rounded-br-lg bg-accent text-accent-foreground"
             : "rounded-bl-lg bg-card"
         )}
       >
         <div className="flex flex-col">
-            {!isOwner && <p className="text-xs font-semibold mb-1">{message.sender_name}</p>}
+            {isOwner && <p className="text-xs font-semibold mb-1">{message.sender_name}</p>}
             {renderContent()}
-            <p className={cn("text-xs mt-1.5 opacity-70", isOwner ? "text-right" : "text-left")}>
+            <p className={cn("text-xs mt-1.5 opacity-70", !isOwner ? "text-right" : "text-left")}>
                 {format(new Date(message.timestamp_ms), "h:mm a")}
             </p>
         </div>

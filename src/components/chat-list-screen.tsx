@@ -1,27 +1,25 @@
 "use client";
 
-import type { InstagramChat } from "@/types/instagram";
+import type { IncompleteChat } from "@/types/instagram";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, MessageSquare, Users, User } from "lucide-react";
+import { Trash2, Users, User } from "lucide-react";
 import ThemeToggle from "./theme-toggle";
 
 interface ChatListScreenProps {
-  chats: InstagramChat[];
-  onSelectChat: (chat: InstagramChat) => void;
+  chats: IncompleteChat[];
+  onSelectChat: (chat: IncompleteChat) => void;
   onClearData: () => void;
 }
 
 export default function ChatListScreen({ chats, onSelectChat, onClearData }: ChatListScreenProps) {
   const sortedChats = [...chats].sort((a, b) => {
-    const lastMessageA = a.messages[a.messages.length - 1]?.timestamp_ms || 0;
-    const lastMessageB = b.messages[b.messages.length - 1]?.timestamp_ms || 0;
-    return lastMessageB - lastMessageA;
+    return (b.lastActivity || 0) - (a.lastActivity || 0);
   });
 
-  const getParticipantCount = (chat: InstagramChat) => chat.participants.length;
+  const getParticipantCount = (chat: IncompleteChat) => chat.participants.length;
 
   return (
     <div className="flex h-full flex-col">
@@ -40,7 +38,6 @@ export default function ChatListScreen({ chats, onSelectChat, onClearData }: Cha
       <ScrollArea className="flex-grow bg-background">
         <div className="mx-auto max-w-3xl space-y-3 p-3 sm:p-4">
           {sortedChats.map((chat) => {
-            const lastMessage = chat.messages[chat.messages.length - 1];
             const participantCount = getParticipantCount(chat);
             return (
               <Card
@@ -58,22 +55,13 @@ export default function ChatListScreen({ chats, onSelectChat, onClearData }: Cha
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {lastMessage ? (
-                    <div className="space-y-1">
-                      <p className="truncate text-sm text-muted-foreground">
-                        <span className="font-medium text-foreground">{lastMessage.sender_name}:</span> {lastMessage.content || '[Media shared]'}
+                  {chat.lastActivity ? (
+                     <p className="text-xs text-muted-foreground">
+                        Last message on {format(new Date(chat.lastActivity), "MMMM d, yyyy")}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Last message on {format(new Date(lastMessage.timestamp_ms), "MMMM d, yyyy")}
-                      </p>
-                    </div>
                   ) : (
-                    <p className="text-sm italic text-muted-foreground">No messages in this chat.</p>
+                    <p className="text-sm italic text-muted-foreground">No recent activity found.</p>
                   )}
-                  <div className="mt-2 flex items-center text-xs text-muted-foreground">
-                    <MessageSquare className="mr-1.5 h-3 w-3" />
-                    {chat.messages.length} messages
-                  </div>
                 </CardContent>
               </Card>
             );

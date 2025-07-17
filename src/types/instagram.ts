@@ -14,11 +14,18 @@ export interface InstagramParticipant {
   name: string;
 }
 
-export interface InstagramChat {
+// Base chat structure used for the chat list
+export interface IncompleteChat {
   participants: InstagramParticipant[];
-  messages: InstagramMessage[];
   title: string;
   is_still_participant: boolean;
   thread_type: string;
   thread_path: string;
+  message_files: string[];
+  lastActivity?: number;
+}
+
+// Full chat structure with all messages, used for the chat view
+export interface InstagramChat extends IncompleteChat {
+  messages: InstagramMessage[];
 }

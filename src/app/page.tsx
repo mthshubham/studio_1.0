@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import JSZip from "jszip";
-import type { InstagramChat, InstagramMessage } from "@/types/instagram";
+import type { InstagramChat } from "@/types/instagram";
 import { useToast } from "@/hooks/use-toast";
 import FileUploadScreen from "@/components/file-upload-screen";
 import ChatView from "@/components/chat-view";
@@ -41,15 +41,13 @@ export default function Home() {
             const content = await messageFile.async("string");
             const rawData = JSON.parse(content);
 
-            // Basic validation for a chat file
-            if (!rawData.thread_path || !rawData.participants || !rawData.messages) {
+            if (!rawData.thread_path || !Array.isArray(rawData.participants) || !Array.isArray(rawData.messages)) {
                 console.warn(`Skipping file as it doesn't seem to be a valid chat file: ${messageFile.name}`);
                 continue;
             }
 
             const threadPath = rawData.thread_path;
             
-            // If it's a new chat, initialize it
             if (!chats[threadPath]) {
               const participants = rawData.participants.map((p: any) => ({ name: fixInstagramString(p.name) }));
               const title = fixInstagramString(rawData.title);
@@ -58,11 +56,10 @@ export default function Home() {
                 ...rawData,
                 participants,
                 title,
-                messages: [], // Initialize with empty messages
+                messages: [],
               };
             }
             
-            // Process and add messages to the existing chat
             const newMessages = rawData.messages.map((m: any) => ({
               ...m,
               sender_name: fixInstagramString(m.sender_name),
@@ -120,11 +117,7 @@ export default function Home() {
   const handleClearData = useCallback(() => {
     setAllChatsData(null);
     setSelectedChat(null);
-    toast({
-      title: "Data Cleared",
-      description: "You can now upload a new file.",
-    });
-  }, [toast]);
+  }, []);
 
   const handleSelectChat = (chat: InstagramChat) => {
     setSelectedChat(chat);

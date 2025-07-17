@@ -12,7 +12,7 @@ interface MessageBubbleProps {
 }
 
 const highlightText = (text: string, query: string) => {
-    if (!query) return text;
+    if (!query || !text) return text;
     const parts = text.split(new RegExp(`(${query})`, 'gi'));
     return (
       <>
@@ -65,7 +65,7 @@ const MessageBubble = forwardRef<HTMLDivElement, MessageBubbleProps>(({ message,
         className={cn(
           "max-w-[75%] rounded-2xl p-3 shadow-md",
           isOwner
-            ? "rounded-br-lg bg-accent text-accent-foreground"
+            ? "rounded-br-lg bg-primary text-primary-foreground"
             : "rounded-bl-lg bg-card"
         )}
       >

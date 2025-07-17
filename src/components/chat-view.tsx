@@ -31,7 +31,6 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
   const scrollViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Assuming the first participant is the owner of the exported data.
     if (chatData.participants.length > 0) {
       setOwner(chatData.participants[0].name);
     }
@@ -50,16 +49,17 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     const dateMap = new Map<string, number>();
     let lastDate: string | null = null;
 
-    filtered.forEach((message, index) => {
-      const messageDate = new Date(message.timestamp_ms).toDateString();
-      if (messageDate !== lastDate) {
-        const dateId = `date-${messageDate}`;
-        groups.push({ type: "date", date: messageDate, id: dateId });
-        dateMap.set(messageDate, groups.length - 1);
-        lastDate = messageDate;
-      }
-      groups.push({ type: "message", message: message, id: `msg-${message.timestamp_ms}-${index}` });
-    });
+    for (let i = 0; i < filtered.length; i++) {
+        const message = filtered[i];
+        const messageDate = new Date(message.timestamp_ms).toDateString();
+        if (messageDate !== lastDate) {
+            const dateId = `date-${messageDate}`;
+            groups.push({ type: "date", date: messageDate, id: dateId });
+            dateMap.set(messageDate, groups.length - 1);
+            lastDate = messageDate;
+        }
+        groups.push({ type: "message", message: message, id: `msg-${message.timestamp_ms}-${i}` });
+    }
 
     return { groupedMessages: groups, dateJumpMap: dateMap };
   }, [chatData.messages, searchQuery]);
@@ -69,17 +69,16 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
     getScrollElement: () => scrollViewportRef.current,
     estimateSize: useCallback((index: number) => {
         const item = groupedMessages[index];
-        if (item.type === 'date') return 48; // Date separator height
+        if (item.type === 'date') return 48;
         
-        // Estimate message height
         const { content } = item.message;
-        const baseHeight = 60; // Base for sender, time, padding etc.
+        const baseHeight = 60;
         const charsPerLine = 50;
         const lineHeight = 20;
         const lines = content ? Math.ceil(content.length / charsPerLine) : 1;
-        return baseHeight + lines * lineHeight;
+        return baseHeight + (lines * lineHeight);
     }, [groupedMessages]),
-    overscan: 20, // Render more items for smoother scrolling
+    overscan: 20,
   });
 
   useEffect(() => {
@@ -98,8 +97,10 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
 
   useEffect(() => {
     const scrollEl = scrollViewportRef.current;
-    scrollEl?.addEventListener('scroll', handleScroll);
-    return () => scrollEl?.removeEventListener('scroll', handleScroll);
+    if (scrollEl) {
+      scrollEl.addEventListener('scroll', handleScroll);
+      return () => scrollEl.removeEventListener('scroll', handleScroll);
+    }
   }, []);
 
   const handleDateJump = (date: Date | undefined) => {
@@ -125,7 +126,11 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
   const clearSearch = () => setSearchQuery("");
   
   const availableDates = useMemo(() => {
-    return new Set(chatData.messages.map(msg => new Date(msg.timestamp_ms).toDateString()))
+    const dates = new Set<string>();
+    for (const msg of chatData.messages) {
+        dates.add(new Date(msg.timestamp_ms).toDateString());
+    }
+    return dates;
   }, [chatData.messages])
 
   const disabledDays = (date: Date) => {
@@ -178,6 +183,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
             {groupedMessages.length > 0 ? (
                 rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const item = groupedMessages[virtualRow.index];
+                if (!item) return null;
                 
                 const content = item.type === 'date' ? (
                     <DateSeparator key={item.id} date={item.date} />
@@ -185,7 +191,7 @@ export default function ChatView({ chatData, onClearData, onBack }: ChatViewProp
                     <MessageBubble 
                         key={item.id}
                         message={item.message}
-                        isOwner={item.message.sender_name !== owner}
+                        isOwner={item.message.sender_name === owner}
                         searchQuery={searchQuery}
                     />
                 );
